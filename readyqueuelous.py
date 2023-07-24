@@ -27,3 +27,22 @@ class ReadyQueuelous(asyncio.Queue):
         self._wakeup_next(self._getters)  # Propagates readiness from put_nowait
         await asyncio.sleep(0)  # Prevent function from running synchronously
 
+    async def put(self, item):
+        """
+        The following patch to `put` solves potential hanging code.
+
+        Consider the following example:
+
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(q.ready())
+            await q.put(1)
+            await q.get()
+
+        This code hangs. put() will call put_nowait because `q` is not full,
+        therefore, it will wake the underlying future awaited on by ready()
+        but will not yield execution back to the event loop. Afterwards, get()
+        will call get_nowait because `q` is not empty and therefore will not
+        yield execution back to event loop. this keeps the task group waiting.
+        """
+        await super().put(item)
+        await asyncio.sleep(0) # forces the coroutine to yield execution.
